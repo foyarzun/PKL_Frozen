@@ -1,0 +1,13 @@
+# PKL Frozen Service - Dependencies
+node_modules/
+.firebase/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
