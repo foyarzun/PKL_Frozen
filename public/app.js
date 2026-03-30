@@ -171,22 +171,21 @@ function exportToExcel(data, filename = 'PKL_Final.xlsx') {
         
         XLSX.utils.book_append_sheet(wb, ws, 'PKL');
         
-        // Use writeFile with fallback to Blob download
-        try {
-            XLSX.writeFile(wb, filename);
-        } catch (writeErr) {
-            // Fallback: create Blob and download via link
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
+        // Always use Blob + anchor tag to guarantee correct filename
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        // Small delay before cleanup to ensure download starts
+        setTimeout(() => {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        }
+        }, 250);
     } catch (err) {
         console.error('Error exporting Excel:', err);
         showToast('Error al exportar Excel: ' + err.message, 'error');
