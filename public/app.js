@@ -11,7 +11,8 @@ const state = {
     scannedItems: [],
     lecturaData: [],
     lecturaColumns: [],
-    errorCount: 0
+    errorCount: 0,
+    lastGeneratedData: []
 };
 
 // ======= DOM ELEMENTS =======
@@ -150,10 +151,46 @@ function parseExcel(file) {
 }
 
 function exportToExcel(data, filename = 'PKL_Final.xlsx') {
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, 'PKL');
-    XLSX.writeFile(wb, filename);
+    try {
+        if (!data || data.length === 0) {
+            showToast('No hay datos para exportar', 'warning');
+            return;
+        }
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(data);
+        
+        // Auto-adjust column widths
+        const colWidths = Object.keys(data[0]).map(key => {
+            const maxLen = Math.max(
+                key.length,
+                ...data.map(row => String(row[key] !== undefined && row[key] !== null ? row[key] : '').length)
+            );
+            return { wch: Math.min(maxLen + 2, 40) };
+        });
+        ws['!cols'] = colWidths;
+        
+        XLSX.utils.book_append_sheet(wb, ws, 'PKL');
+        
+        // Use writeFile with fallback to Blob download
+        try {
+            XLSX.writeFile(wb, filename);
+        } catch (writeErr) {
+            // Fallback: create Blob and download via link
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    } catch (err) {
+        console.error('Error exporting Excel:', err);
+        showToast('Error al exportar Excel: ' + err.message, 'error');
+    }
 }
 
 // ======= MASTER FILE HANDLING =======
@@ -254,6 +291,7 @@ function setupScanner() {
     clearScansBtn.addEventListener('click', () => {
         state.scannedItems = [];
         state.errorCount = 0;
+        state.lastGeneratedData = [];
         renderScannedTable();
         updateStats();
         previewPanel.classList.add('hidden');
@@ -348,7 +386,16 @@ function renderScannedTable() {
 function setupGenerate() {
     generatePKLBtn.addEventListener('click', generatePKL);
     downloadExcelBtn.addEventListener('click', () => {
-        const data = getPreviewData();
+        // Use stored data from last generation, or regenerate
+        const data = state.lastGeneratedData && state.lastGeneratedData.length > 0
+            ? state.lastGeneratedData
+            : getPreviewData();
+        
+        if (!data || data.length === 0) {
+            showToast('No hay datos para descargar. Genera el PKL primero.', 'warning');
+            return;
+        }
+        
         exportToExcel(data, 'PKL_Final.xlsx');
         showToast('Excel descargado exitosamente', 'success');
     });
@@ -383,6 +430,9 @@ function generatePKL() {
         return;
     }
 
+    // Store the generated data for download
+    state.lastGeneratedData = data;
+
     // Render preview
     const cols = Object.keys(data[0]);
     previewHead.innerHTML = `<tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
@@ -392,7 +442,7 @@ function generatePKL() {
 
     previewPanel.classList.remove('hidden');
     previewPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    showToast('PKL generado exitosamente', 'success');
+    showToast('PKL generado exitosamente. Haz clic en "Descargar Excel Final" para obtener el archivo.', 'success');
 }
 
 // ======= UPLOAD MODE =======
